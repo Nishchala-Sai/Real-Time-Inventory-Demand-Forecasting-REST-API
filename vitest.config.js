@@ -19,6 +19,7 @@ export default defineConfig({
           name: 'backend',
           root: 'backend',
           include: ['test/**/*.test.js'],
+          globalSetup: ['test/globalSetup.js'],
           hookTimeout: 180_000,
           testTimeout: 30_000,
           env: {

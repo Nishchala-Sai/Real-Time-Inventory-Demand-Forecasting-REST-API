@@ -8,11 +8,12 @@ permissions:
   contents: read
 
 env:
-  MONGOMS_DOWNLOAD_DIR: ~/.cache/mongodb-binaries
+  MONGOMS_DOWNLOAD_DIR: /home/runner/.cache/mongodb-binaries
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned because the mongod binary the tests download must support the runner's OS.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
