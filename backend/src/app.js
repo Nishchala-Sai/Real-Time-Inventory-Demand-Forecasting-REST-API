@@ -11,8 +11,10 @@ import { originCheck } from './middleware/origin.js';
 import { globalLimit } from './middleware/rateLimits.js';
 import { alertRoutes } from './routes/alerts.js';
 import { authRoutes } from './routes/auth.js';
+import { eventRoutes } from './routes/events.js';
 import { forecastRoutes } from './routes/forecast.js';
 import { healthRoutes } from './routes/health.js';
+import { movementRoutes } from './routes/movements.js';
 import { productRoutes } from './routes/products.js';
 import { supplierRoutes } from './routes/suppliers.js';
 import { userRoutes } from './routes/users.js';
@@ -64,8 +66,10 @@ export function createApp() {
     userRoutes,
     supplierRoutes,
     productRoutes,
+    movementRoutes,
     forecastRoutes,
     alertRoutes,
+    eventRoutes,
   );
 
   if (config.NODE_ENV === 'production') {

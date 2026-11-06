@@ -2,6 +2,7 @@ import { createApp } from './app.js';
 import { config } from './config.js';
 import { connectDb, disconnectDb } from './db.js';
 import { logger } from './lib/logger.js';
+import { closeAllStreams } from './routes/events.js';
 
 const FORCED_EXIT_MS = 10_000;
 
@@ -19,7 +20,9 @@ server.requestTimeout = 30_000;
 async function shutdown(signal) {
   logger.info(`${signal} received, shutting down`);
   setTimeout(() => process.exit(1), FORCED_EXIT_MS).unref();
-  await new Promise((resolve) => server.close(resolve));
+  const closed = new Promise((resolve) => server.close(resolve));
+  closeAllStreams();
+  await closed;
   await disconnectDb();
   process.exit(0);
 }

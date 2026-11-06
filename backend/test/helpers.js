@@ -2,6 +2,7 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import request from 'supertest';
 import { connectDb, disconnectDb } from '../src/db.js';
 import { hashPassword } from '../src/lib/password.js';
+import { Product } from '../src/models/Product.js';
 import { Supplier } from '../src/models/Supplier.js';
 import { User } from '../src/models/User.js';
 
@@ -30,7 +31,12 @@ export async function loginAs(app, role, fields) {
   const agent = request.agent(app);
   const res = await agent.post('/api/v1/auth/login').send({ email: user.email, password: PASSWORD });
   if (res.status !== 200) throw new Error(`Login failed: ${res.status} ${res.text}`);
-  return { agent, user };
+  const cookie = res.headers['set-cookie'].find((value) => value.startsWith('at=')).split(';')[0];
+  return { agent, user, cookie };
+}
+
+export function createProductDoc(fields) {
+  return Product.create({ name: fields.sku, category: 'test', unitPriceCents: 500, ...fields });
 }
 
 // Every route is mounted directly under /api/v1, so walking the stack gives the whole API surface.
