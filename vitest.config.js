@@ -18,6 +18,8 @@ export default defineConfig({
             JWT_REFRESH_SECRET: 'test-refresh-secret-that-is-long-enough',
             APP_ORIGIN: 'http://localhost:5173',
             STORE_TZ: 'UTC',
+            ADMIN_EMAIL: 'admin@example.com',
+            ADMIN_PASSWORD: 'test-admin-password',
           },
         },
       },
