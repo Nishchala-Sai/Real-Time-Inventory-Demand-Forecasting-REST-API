@@ -1,4 +1,3 @@
-import React from 'react';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -13,7 +12,7 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-export default function ForecastChart({ salesHistory, smaForecast, expForecast }) {
+export default function ForecastChart({ salesHistory, smaForecast, expForecast, alpha, smaWindow }) {
   const chartData = {
     labels: salesHistory.map(d => d.date),
     datasets: [
@@ -25,14 +24,14 @@ export default function ForecastChart({ salesHistory, smaForecast, expForecast }
         tension: 0.2
       },
       {
-        label: 'SMA Forecast (k=3)',
+        label: `SMA Forecast (k=${smaWindow})`,
         data: smaForecast,
         borderColor: '#f59e0b',
         borderDash: [5, 5],
         tension: 0.2
       },
       {
-        label: 'Exp Smoothing (α=0.3)',
+        label: `Exp Smoothing (α=${alpha})`,
         data: expForecast,
         borderColor: '#10b981',
         tension: 0.2

@@ -17,10 +17,9 @@ export function calculateSMA(data, period = 3) {
 export function calculateExponentialSmoothing(data, alpha = 0.3) {
   if (!data || data.length === 0) return [];
   
-  const forecasts = [data[0]]; 
+  const forecasts = [data[0]];
   for (let i = 1; i < data.length; i++) {
-    const nextForecast = alpha * data[i - 1] + (1 - alpha) * forecasts[i - 1];
-    forecasts.push(Number(nextForecast.toFixed(2)));
+    forecasts.push(alpha * data[i - 1] + (1 - alpha) * forecasts[i - 1]);
   }
   return forecasts;
 }

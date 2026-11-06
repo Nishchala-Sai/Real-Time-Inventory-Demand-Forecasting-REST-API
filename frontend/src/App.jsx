@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import InventoryTable from './components/InventoryTable';
 import ForecastChart from './components/ForecastChart';
 import { mockProducts, mockSalesHistory } from './data/mockData';
 import { calculateSMA, calculateExponentialSmoothing } from './utils/themath';
 
+const SMA_WINDOW = 3;
+
 export default function App() {
   const [alpha, setAlpha] = useState(0.3);
 
   const rawSales = mockSalesHistory.map(item => item.sales);
-  const smaForecast = calculateSMA(rawSales, 3);
+  const smaForecast = calculateSMA(rawSales, SMA_WINDOW);
   const expForecast = calculateExponentialSmoothing(rawSales, alpha);
 
   return (
@@ -43,6 +45,8 @@ export default function App() {
         salesHistory={mockSalesHistory}
         smaForecast={smaForecast}
         expForecast={expForecast}
+        alpha={alpha}
+        smaWindow={SMA_WINDOW}
       />
     </div>
   );
