@@ -9,7 +9,10 @@ import { logger } from './lib/logger.js';
 import { errorHandler, notFound } from './middleware/error.js';
 import { originCheck } from './middleware/origin.js';
 import { globalLimit } from './middleware/rateLimits.js';
+import { authRoutes } from './routes/auth.js';
 import { healthRoutes } from './routes/health.js';
+import { supplierRoutes } from './routes/suppliers.js';
+import { userRoutes } from './routes/users.js';
 
 const REQUEST_ID = /^[\w-]{1,64}$/;
 const FRONTEND_DIST = fileURLToPath(new URL('../../frontend/dist', import.meta.url));
@@ -51,7 +54,7 @@ export function createApp() {
   app.use(cookieParser());
   app.use(originCheck({ appOrigin: config.APP_ORIGIN, corsOrigins: config.CORS_ORIGINS }));
 
-  app.use('/api/v1', healthRoutes);
+  app.use('/api/v1', healthRoutes, authRoutes, userRoutes, supplierRoutes);
 
   if (config.NODE_ENV === 'production') {
     app.use(express.static(FRONTEND_DIST));
