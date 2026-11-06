@@ -16,5 +16,22 @@ services:
       retries: 20
       start_period: 5s
 
+  api:
+    build: .
+    depends_on:
+      mongo:
+        condition: service_healthy
+    # The first start can beat the replica set electing a primary, and the API exits on a failed connection.
+    restart: on-failure
+    ports:
+      - "4000:4000"
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/inventory?replicaSet=rs0
+      # Local defaults only. Set real values in the environment for any shared deployment.
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-local-compose-only-access-secret-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-local-compose-only-refresh-secret-change-me}
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:4000}
+      STORE_TZ: ${STORE_TZ:-UTC}
+
 volumes:
   mongo-data:

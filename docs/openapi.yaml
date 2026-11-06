@@ -1,0 +1,987 @@
+openapi: 3.1.0
+info:
+  title: Inventory and Demand Forecasting API
+  version: 1.0.0
+  description: >
+    Real-time stock ledger with explainable demand forecasts. Requests and responses are JSON,
+    except the server-sent event stream. Mutating requests need `Content-Type: application/json`,
+    and any `Origin` header must be an allowed origin. Authentication uses httpOnly cookies set by
+    `POST /auth/login`.
+  license:
+    name: MIT
+    url: https://opensource.org/license/mit
+servers:
+  - url: http://localhost:4000/api/v1
+    description: Local
+tags:
+  - name: Health
+    description: Liveness and readiness probes
+  - name: Auth
+    description: Sessions
+  - name: Users
+    description: User administration
+  - name: Suppliers
+    description: Supplier registry
+  - name: Products
+    description: Catalog, sales history and ledger
+  - name: Stock
+    description: Recording stock changes
+  - name: Forecast
+    description: Demand forecasts and tuning
+  - name: Alerts
+    description: Low-stock alerts
+  - name: Events
+    description: Real-time updates
+security:
+  - accessCookie: []
+paths:
+  /health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: Liveness
+      security: []
+      responses:
+        '200':
+          description: The process is up
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+              example: { status: ok }
+  /ready:
+    get:
+      tags: [Health]
+      operationId: getReady
+      summary: Readiness, which pings MongoDB
+      security: []
+      responses:
+        '200':
+          description: MongoDB is reachable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '503':
+          description: MongoDB is unreachable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+              example: { status: unavailable }
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Sign in and set the `at` and `rt` cookies
+      description: A wrong password and an unknown email give the same 401. Five failures per IP and email in 15 minutes give a 429.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 1, maxLength: 128 }
+            example: { email: manager@example.com, password: demo-password-123 }
+      responses:
+        '200':
+          $ref: '#/components/responses/UserResult'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshSession
+      summary: Rotate both cookies using the refresh cookie
+      security:
+        - refreshCookie: []
+      responses:
+        '200':
+          $ref: '#/components/responses/UserResult'
+        '401':
+          $ref: '#/components/responses/Error'
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Clear cookies and revoke every refresh token for this user
+      responses:
+        '204':
+          description: Signed out
+        '401':
+          $ref: '#/components/responses/Error'
+  /auth/me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentUser
+      summary: The current user
+      responses:
+        '200':
+          $ref: '#/components/responses/UserResult'
+        '401':
+          $ref: '#/components/responses/Error'
+  /users:
+    get:
+      tags: [Users]
+      operationId: listUsers
+      summary: List users (admin)
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - name: after
+          in: query
+          description: Cursor from the previous page
+          schema: { $ref: '#/components/schemas/ObjectId' }
+      responses:
+        '200':
+          description: One page of users
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageCursor'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/User' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    post:
+      tags: [Users]
+      operationId: createUser
+      summary: Create a user (admin)
+      description: There is no public signup. `supplierId` is required for the supplier role and refused for others.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, password, role]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 12, maxLength: 128 }
+                role: { $ref: '#/components/schemas/Role' }
+                supplierId: { $ref: '#/components/schemas/ObjectId' }
+      responses:
+        '201':
+          $ref: '#/components/responses/UserResult'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /users/{id}:
+    patch:
+      tags: [Users]
+      operationId: updateUser
+      summary: Change role, disabled or supplier (admin)
+      description: Disabling a user revokes their refresh tokens.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/ObjectId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                role: { $ref: '#/components/schemas/Role' }
+                disabled: { type: boolean }
+                supplierId:
+                  oneOf:
+                    - $ref: '#/components/schemas/ObjectId'
+                    - type: 'null'
+      responses:
+        '200':
+          $ref: '#/components/responses/UserResult'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /suppliers:
+    get:
+      tags: [Suppliers]
+      operationId: listSuppliers
+      summary: List suppliers (admin, manager)
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - name: after
+          in: query
+          description: Cursor from the previous page
+          schema: { $ref: '#/components/schemas/ObjectId' }
+      responses:
+        '200':
+          description: One page of suppliers
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageCursor'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Supplier' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    post:
+      tags: [Suppliers]
+      operationId: createSupplier
+      summary: Create a supplier (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 120 }
+                contactEmail: { type: string, format: email }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  supplier: { $ref: '#/components/schemas/Supplier' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /products:
+    get:
+      tags: [Products]
+      operationId: listProducts
+      summary: List products (suppliers see only their own)
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [low, ok] }
+        - name: category
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 60 }
+        - name: q
+          in: query
+          description: Prefix match on SKU or name
+          schema: { type: string, minLength: 1, maxLength: 60 }
+        - $ref: '#/components/parameters/limit'
+        - name: after
+          in: query
+          description: SKU cursor from the previous page
+          schema: { $ref: '#/components/schemas/Sku' }
+      responses:
+        '200':
+          description: One page of products
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageCursor'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Product' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+    post:
+      tags: [Products]
+      operationId: createProduct
+      summary: Create a product (admin)
+      description: Initial stock is recorded as a `restock` movement with the note `initial`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [sku, name, category, unitPriceCents]
+              properties:
+                sku: { $ref: '#/components/schemas/Sku' }
+                name: { type: string, minLength: 1, maxLength: 120 }
+                category: { type: string, minLength: 1, maxLength: 60 }
+                unitPriceCents: { type: integer, minimum: 0 }
+                leadTimeDays: { type: integer, minimum: 1, maximum: 365, default: 7 }
+                reviewPeriodDays: { type: integer, minimum: 1, maximum: 90, default: 7 }
+                serviceLevel: { type: number, enum: [0.9, 0.95, 0.975, 0.99], default: 0.95 }
+                reorderPointOverride: { type: [integer, 'null'], minimum: 0 }
+                supplierId: { $ref: '#/components/schemas/ObjectId' }
+                initialStock: { type: integer, minimum: 0, maximum: 100000, default: 0 }
+      responses:
+        '201':
+          $ref: '#/components/responses/ProductResult'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /products/{sku}:
+    parameters:
+      - $ref: '#/components/parameters/sku'
+    get:
+      tags: [Products]
+      operationId: getProduct
+      summary: One product
+      description: A supplier gets a 404 for another supplier's product.
+      responses:
+        '200':
+          $ref: '#/components/responses/ProductResult'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      tags: [Products]
+      operationId: updateProduct
+      summary: Edit metadata (admin, manager)
+      description: "`sku` and `currentStock` are rejected. Stock only changes through stock movements."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name: { type: string, minLength: 1, maxLength: 120 }
+                category: { type: string, minLength: 1, maxLength: 60 }
+                unitPriceCents: { type: integer, minimum: 0 }
+                leadTimeDays: { type: integer, minimum: 1, maximum: 365 }
+                reviewPeriodDays: { type: integer, minimum: 1, maximum: 90 }
+                serviceLevel: { type: number, enum: [0.9, 0.95, 0.975, 0.99] }
+                reorderPointOverride: { type: [integer, 'null'], minimum: 0 }
+                supplierId:
+                  oneOf:
+                    - $ref: '#/components/schemas/ObjectId'
+                    - type: 'null'
+      responses:
+        '200':
+          $ref: '#/components/responses/ProductResult'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      tags: [Products]
+      operationId: archiveProduct
+      summary: Soft delete (admin)
+      responses:
+        '204':
+          description: Archived
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /products/{sku}/sales:
+    get:
+      tags: [Products]
+      operationId: getProductSales
+      summary: Daily demand with gaps filled by 0
+      parameters:
+        - $ref: '#/components/parameters/sku'
+        - name: from
+          in: query
+          description: Defaults to 90 days ending at `to`. The range cannot exceed 730 days.
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: Defaults to today
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Daily quantities, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sku: { $ref: '#/components/schemas/Sku' }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        day: { type: string, format: date }
+                        qty: { type: integer }
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /products/{sku}/movements:
+    get:
+      tags: [Products]
+      operationId: getProductMovements
+      summary: The ledger, newest first (admin, manager)
+      parameters:
+        - $ref: '#/components/parameters/sku'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/timeCursor'
+      responses:
+        '200':
+          description: One page of movements
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageCursor'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Movement' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /stock-movements:
+    post:
+      tags: [Stock]
+      operationId: recordMovement
+      summary: Record a sale, restock, adjustment or return (admin, manager)
+      description: >
+        `qty` is always positive and the server derives the sign. An adjustment needs `direction` and
+        `note`. Stock, ledger, daily demand, live forecast and alert change in one transaction.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          description: Replays the first result with a 200 instead of applying the movement twice.
+          schema: { type: string, pattern: '^[\w-]{1,64}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [sku, type, qty]
+              properties:
+                sku: { $ref: '#/components/schemas/Sku' }
+                type: { type: string, enum: [sale, restock, adjustment, return] }
+                qty: { type: integer, minimum: 1, maximum: 100000 }
+                direction: { type: string, enum: [in, out] }
+                note: { type: string, minLength: 1, maxLength: 200 }
+                unitPriceCents: { type: integer, minimum: 0, description: Sales only. Defaults to the product price. }
+            example: { sku: P101, type: sale, qty: 2 }
+      responses:
+        '200':
+          $ref: '#/components/responses/MovementResult'
+        '201':
+          $ref: '#/components/responses/MovementResult'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+  /forecast:
+    get:
+      tags: [Forecast]
+      operationId: getForecastBatch
+      summary: Forecasts for up to 50 SKUs, without history
+      description: Out-of-scope and unknown SKUs are left out of the result.
+      parameters:
+        - name: skus
+          in: query
+          required: true
+          description: Comma-separated SKUs
+          schema: { type: string }
+          example: P101,P102
+        - $ref: '#/components/parameters/method'
+        - $ref: '#/components/parameters/alpha'
+        - $ref: '#/components/parameters/beta'
+        - $ref: '#/components/parameters/window'
+        - $ref: '#/components/parameters/horizon'
+        - $ref: '#/components/parameters/holdout'
+        - $ref: '#/components/parameters/lookback'
+      responses:
+        '200':
+          description: One item per SKU found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Forecast' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+  /forecast/{sku}:
+    get:
+      tags: [Forecast]
+      operationId: getForecast
+      summary: Forecast for one product
+      description: >
+        Query parameters override auto-selection for what-if exploration and never persist. A read also
+        recomputes the live state from daily demand if the stored state has drifted.
+      parameters:
+        - $ref: '#/components/parameters/sku'
+        - $ref: '#/components/parameters/method'
+        - $ref: '#/components/parameters/alpha'
+        - $ref: '#/components/parameters/beta'
+        - $ref: '#/components/parameters/window'
+        - $ref: '#/components/parameters/horizon'
+        - $ref: '#/components/parameters/holdout'
+        - $ref: '#/components/parameters/lookback'
+      responses:
+        '200':
+          description: The forecast
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forecast'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /forecast/{sku}/tune:
+    post:
+      tags: [Forecast]
+      operationId: tuneForecast
+      summary: Persist α and rebuild the live state (admin, manager)
+      description: With `alpha`, saves that value. Without it, selects α on a holdout and returns a 409 when history is too short.
+      parameters:
+        - $ref: '#/components/parameters/sku'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                alpha: { type: number, minimum: 0.01, maximum: 0.99 }
+                holdout: { type: integer, minimum: 0, maximum: 60, default: 14 }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sku: { $ref: '#/components/schemas/Sku' }
+                  alpha: { type: number }
+                  next: { type: number }
+                  reorderPoint: { type: integer }
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /alerts:
+    get:
+      tags: [Alerts]
+      operationId: listAlerts
+      summary: Low-stock alerts, newest first (suppliers see only their own)
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, resolved] }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/timeCursor'
+      responses:
+        '200':
+          description: One page of alerts
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageCursor'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Alert' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+  /events:
+    get:
+      tags: [Events]
+      operationId: streamEvents
+      summary: Server-sent event stream
+      description: >
+        Event names are `stock.updated`, `forecast.updated`, `alert.opened` and `alert.resolved`. Each `data`
+        line is an Event as JSON. A `: ping` comment arrives every 25 seconds. Suppliers receive only their
+        own products' events. There is no replay, so a reconnecting client refetches its lists.
+      responses:
+        '200':
+          description: The stream
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '401':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    accessCookie:
+      type: apiKey
+      in: cookie
+      name: at
+      description: 15-minute access JWT in an httpOnly, SameSite=Strict cookie
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: rt
+      description: 7-day refresh JWT, sent only to /api/v1/auth
+  parameters:
+    sku:
+      name: sku
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Sku' }
+    limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    timeCursor:
+      name: after
+      in: query
+      description: Cursor from the previous page
+      schema: { type: string, pattern: '^\d+_[0-9a-fA-F]{24}$' }
+    method:
+      name: method
+      in: query
+      schema: { type: string, enum: [auto, sma, ses, holt, croston] }
+    alpha:
+      name: alpha
+      in: query
+      schema: { type: number, minimum: 0.01, maximum: 0.99 }
+    beta:
+      name: beta
+      in: query
+      schema: { type: number, minimum: 0.01, maximum: 0.99 }
+    window:
+      name: window
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 60 }
+    horizon:
+      name: horizon
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 90, default: 7 }
+    holdout:
+      name: holdout
+      in: query
+      description: Must be less than half of the history
+      schema: { type: integer, minimum: 0, maximum: 60, default: 14 }
+    lookback:
+      name: lookback
+      in: query
+      schema: { type: integer, minimum: 14, maximum: 730, default: 180 }
+  responses:
+    Error:
+      description: The standard error shape
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: { code: VALIDATION_ERROR, message: Request failed validation, details: [{ path: body.qty, message: Too small }] }
+    UserResult:
+      description: The user
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              user: { $ref: '#/components/schemas/User' }
+    ProductResult:
+      description: The product
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              product: { $ref: '#/components/schemas/Product' }
+    MovementResult:
+      description: 201 when recorded, 200 when an idempotency key replays an earlier result
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              movement: { $ref: '#/components/schemas/Movement' }
+              product: { $ref: '#/components/schemas/StockLevel' }
+              forecast:
+                type: object
+                properties:
+                  next: { type: number }
+                  provisional: { type: boolean }
+  schemas:
+    Status:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - VALIDATION_ERROR
+                - UNAUTHENTICATED
+                - FORBIDDEN
+                - NOT_FOUND
+                - CONFLICT
+                - INSUFFICIENT_STOCK
+                - UNSUPPORTED_MEDIA_TYPE
+                - RATE_LIMITED
+                - INTERNAL
+                - SERVICE_UNAVAILABLE
+            message: { type: string }
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  path: { type: string }
+                  message: { type: string }
+    ObjectId:
+      type: string
+      pattern: '^[0-9a-fA-F]{24}$'
+    Sku:
+      type: string
+      pattern: '^[A-Z0-9-]{2,32}$'
+    Role:
+      type: string
+      enum: [admin, manager, supplier]
+    PageCursor:
+      type: object
+      properties:
+        next:
+          type: [string, 'null']
+          description: Pass as `after` to get the next page. Null on the last page.
+    User:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/ObjectId' }
+        email: { type: string, format: email }
+        role: { $ref: '#/components/schemas/Role' }
+        supplierId: { type: [string, 'null'] }
+        disabled: { type: boolean }
+    Supplier:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/ObjectId' }
+        name: { type: string }
+        contactEmail: { type: [string, 'null'] }
+    StockLevel:
+      type: object
+      properties:
+        sku: { $ref: '#/components/schemas/Sku' }
+        currentStock: { type: integer }
+        reorderPoint: { type: integer }
+        status: { type: string, enum: [low, ok] }
+        daysOfCover: { type: [number, 'null'] }
+    Product:
+      allOf:
+        - $ref: '#/components/schemas/StockLevel'
+        - type: object
+          properties:
+            name: { type: string }
+            category: { type: string }
+            unitPriceCents: { type: integer }
+            leadTimeDays: { type: integer }
+            reviewPeriodDays: { type: integer }
+            serviceLevel: { type: number }
+            reorderPointOverride: { type: [integer, 'null'] }
+            supplierId: { type: [string, 'null'] }
+            alpha: { type: number }
+    Movement:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/ObjectId' }
+        type: { type: string, enum: [sale, restock, adjustment, return] }
+        delta: { type: integer }
+        unitPriceCents: { type: [integer, 'null'] }
+        at: { type: string, format: date-time }
+        day: { type: string, format: date }
+        note: { type: [string, 'null'] }
+    Alert:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/ObjectId' }
+        sku: { type: [string, 'null'] }
+        name: { type: [string, 'null'] }
+        type: { type: string, enum: [low_stock] }
+        status: { type: string, enum: [open, resolved] }
+        stockAtOpen: { type: integer }
+        reorderPointAtOpen: { type: integer }
+        createdAt: { type: string, format: date-time }
+        resolvedAt: { type: [string, 'null'], format: date-time }
+    Metrics:
+      type: object
+      properties:
+        mae: { type: [number, 'null'] }
+        rmse: { type: [number, 'null'] }
+        wape: { type: [number, 'null'] }
+        bias: { type: [number, 'null'], description: Negative means under-forecasting }
+        n: { type: integer }
+    Forecast:
+      type: object
+      properties:
+        sku: { $ref: '#/components/schemas/Sku' }
+        method: { type: string, enum: [sma, ses, holt, croston, coldstart] }
+        params: { type: object }
+        asOf: { type: string, format: date, description: The last closed day }
+        provisional: { type: boolean, description: True when today already has sales }
+        confidence: { type: string, enum: [low, medium, high] }
+        history:
+          type: array
+          description: Left out by the batch endpoint
+          items:
+            type: object
+            properties:
+              day: { type: string, format: date }
+              actual: { type: integer }
+              fitted: { type: [number, 'null'] }
+        forecast:
+          type: array
+          items:
+            type: object
+            properties:
+              day: { type: string, format: date }
+              value: { type: number }
+              lower: { type: number }
+              upper: { type: number }
+        intervalMethod: { type: string, enum: [exact, approx] }
+        metrics:
+          type: object
+          properties:
+            holdout:
+              oneOf:
+                - $ref: '#/components/schemas/Metrics'
+                - type: 'null'
+            inSample: { $ref: '#/components/schemas/Metrics' }
+        leaderboard:
+          type: array
+          description: Best of each model, filled only when the method is auto-selected
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Metrics'
+              - type: object
+                properties:
+                  method: { type: string }
+                  params: { type: object }
+        reorder:
+          type: object
+          properties:
+            reorderPoint: { type: integer }
+            safetyStock: { type: number }
+            suggestedOrderQty: { type: integer }
+            daysOfCover: { type: [number, 'null'] }
+        live:
+          type: object
+          description: The per-sale SES state stored on the product
+          properties:
+            alpha: { type: number }
+            next: { type: number }
+            provisional: { type: boolean }
+        explanation:
+          type: object
+          properties:
+            summary: { type: string }
+            weights:
+              type: array
+              items:
+                type: object
+                properties:
+                  day: { type: string, format: date }
+                  weight: { type: number }
+            change: { type: [object, 'null'] }
+            notes:
+              type: array
+              items: { type: string }
+    Event:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [stock.updated, forecast.updated, alert.opened, alert.resolved] }
+        at: { type: string, format: date-time }
+        sku: { $ref: '#/components/schemas/Sku' }
+        supplierId: { type: [string, 'null'] }
+        data: { type: object }
