@@ -36,7 +36,7 @@ export function stateFromRows(alpha, rows, currentDay) {
   });
 }
 
-export function liveReorder(product, state) {
+function liveReorder(product, state) {
   return reorder({
     forecast: [state.next],
     sigma: Math.sqrt(state.mse),

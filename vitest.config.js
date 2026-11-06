@@ -5,6 +5,16 @@ export default defineConfig({
     projects: [
       { test: { name: 'forecast', root: 'packages/forecast', include: ['test/**/*.test.js'] } },
       {
+        extends: 'frontend/vite.config.js',
+        root: 'frontend',
+        test: {
+          name: 'frontend',
+          include: ['test/**/*.test.jsx'],
+          environment: 'jsdom',
+          setupFiles: ['test/setup.js'],
+        },
+      },
+      {
         test: {
           name: 'backend',
           root: 'backend',

@@ -109,6 +109,21 @@ describe('explain', () => {
     expect(match.summary).toContain('matching');
   });
 
+  it('does not blame the latest sale when the forecast moved against it', () => {
+    const y = Array.from({ length: 20 }, (_, t) => 10 + 2 * t).concat(47);
+    const holtResult = explain({
+      method: 'holt',
+      params: { alpha: 0.1, beta: 0.2 },
+      y,
+      days: Array.from({ length: 21 }, (_, i) => `2026-10-${String(i + 1).padStart(2, '0')}`),
+      current: 51,
+    });
+    expect(holtResult.change.previous).toBeCloseTo(50, 6);
+    expect(holtResult.summary).toContain('Up from 50.0 even though 21 Oct sold 47, below');
+    expect(holtResult.summary).toContain('longer-run pattern');
+    expect(holtResult.summary).not.toContain('because 21 Oct');
+  });
+
   it('explains a young product and notes a narrowly beaten model', () => {
     const young = explain({ method: 'coldstart', y: [3, 4], days: days(2), current: 3.5, prior: 4 });
     expect(young.notes[0]).toContain('Only 2 days');

@@ -40,7 +40,12 @@ function changeSentence({ previous, current, driverDay, driverQty }) {
   if (fmt(current) === fmt(previous)) return `Unchanged from ${fmt(previous)}.`;
   const direction = current > previous ? 'Up' : 'Down';
   const relation = driverQty > previous ? 'above' : driverQty < previous ? 'below' : 'matching';
-  return `${direction} from ${fmt(previous)} because ${shortDay(driverDay)} sold ${driverQty}, ${relation} the ${fmt(previous)} expected.`;
+  const actual = `${shortDay(driverDay)} sold ${driverQty}, ${relation} the ${fmt(previous)} expected`;
+  // A trend or a window dropping an old day can move the forecast against the latest sale,
+  // and blaming that sale would be a false explanation.
+  const latestSaleAgrees = current > previous ? driverQty > previous : driverQty < previous;
+  if (!latestSaleAgrees) return `${direction} from ${fmt(previous)} even though ${actual}, because the longer-run pattern outweighs one day.`;
+  return `${direction} from ${fmt(previous)} because ${actual}.`;
 }
 
 function buildNotes(method, runnerUp, n) {

@@ -130,3 +130,224 @@ body {
   accent-color: #10b981;
   cursor: pointer;
 }
+
+/* Header and user box */
+.dashboard-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-box {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+/* Forms and buttons */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 24rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #d1d5db;
+}
+
+.field-grow {
+  flex: 1 1 14rem;
+}
+
+.field input:not([type='range']),
+.field select {
+  background-color: #111827;
+  color: #f3f4f6;
+  border: 1px solid #4b5563;
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+  font: inherit;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #d1d5db;
+}
+
+.button {
+  background-color: #10b981;
+  color: #052e22;
+  border: 1px solid #10b981;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.875rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.button-quiet {
+  background-color: transparent;
+  color: #d1d5db;
+  border-color: #4b5563;
+}
+
+.button-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.error-text {
+  color: #f87171;
+  font-size: 0.875rem;
+}
+
+.muted {
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+/* Dashboard pieces */
+.card-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.simulate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.stats dt {
+  color: #9ca3af;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.stats dd {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 0.5rem;
+}
+
+.explanation {
+  border-top: 1px solid #374151;
+  padding-top: 1rem;
+  color: #d1d5db;
+}
+
+.explanation ul {
+  margin: 0.5rem 0 0.5rem 1.25rem;
+}
+
+.badge-low {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.badge-medium {
+  background-color: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+
+.badge-high {
+  background-color: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+.row-flash td {
+  animation: row-flash 1.2s ease-out;
+}
+
+@keyframes row-flash {
+  from {
+    background-color: rgba(59, 130, 246, 0.45);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-flash td {
+    animation: none;
+    outline: 1px solid #3b82f6;
+  }
+}
+
+.toasts {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  left: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.toast {
+  background-color: #7f1d1d;
+  color: #fee2e2;
+  border: 1px solid #ef4444;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  max-width: 28rem;
+}

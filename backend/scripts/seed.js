@@ -12,7 +12,7 @@ import { User } from '../src/models/User.js';
 import { rebuildDailyDemand, rebuildLiveStates } from '../src/services/liveForecast.js';
 import { CATALOG, HISTORY_DAYS, mulberry32 } from './catalog.js';
 
-export const DEMO_PASSWORD = 'demo-password-123';
+const DEMO_PASSWORD = 'demo-password-123';
 
 async function ensureAdmin() {
   if (await User.exists({ role: 'admin' })) return false;
