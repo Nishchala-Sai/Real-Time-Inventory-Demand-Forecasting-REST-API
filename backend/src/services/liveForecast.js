@@ -5,9 +5,11 @@ import { addDays, dayKey, range } from '../lib/days.js';
 import { DailyDemand } from '../models/DailyDemand.js';
 import { Product } from '../models/Product.js';
 import { StockMovement } from '../models/StockMovement.js';
-import { syncAlert } from './alerts.js';
+import { publishAlertChange, syncAlert } from './alerts.js';
 
 export const LIVE_LOOKBACK_DAYS = 180;
+const STATE_FIELDS = ['level', 'mse', 'n', 'lastClosedDay', 'openDay', 'openQty', 'next'];
+const MONGO_DUPLICATE_KEY = 11000;
 
 export const today = () => dayKey(new Date(), config.STORE_TZ);
 
@@ -47,6 +49,42 @@ export function liveReorder(product, state) {
 
 export function effectiveReorderPoint(product, state) {
   return product.reorderPointOverride ?? liveReorder(product, state).reorderPoint;
+}
+
+function sameState(a, b) {
+  return STATE_FIELDS.every((field) =>
+    typeof b[field] === 'number' ? Math.abs((a[field] ?? 0) - b[field]) < 1e-9 : (a[field] ?? null) === b[field],
+  );
+}
+
+// Self-healing: recompute from dailydemands and overwrite the stored state when it has drifted.
+// The updatedAt condition makes this lose to a concurrent sale, which holds newer data.
+export async function resyncLiveState(product, rows, { force = false } = {}) {
+  const state = stateFromRows(product.forecast.alpha, rows, today());
+  if (!force && sameState(product.forecast, state)) return state;
+
+  const reorderPoint = effectiveReorderPoint(product, state);
+  const updatedAt = new Date();
+  const { modifiedCount } = await Product.updateOne(
+    { _id: product._id, 'forecast.updatedAt': product.forecast.updatedAt ?? null },
+    { $set: { forecast: { ...state, updatedAt }, reorderPoint } },
+  );
+  if (modifiedCount === 0) return state;
+
+  product.forecast = { ...state, updatedAt };
+  const changedPoint = reorderPoint !== product.reorderPoint;
+  product.reorderPoint = reorderPoint;
+  if (changedPoint) await syncAlertQuietly(product);
+  return state;
+}
+
+async function syncAlertQuietly(product) {
+  try {
+    publishAlertChange(await syncAlert(product), product);
+  } catch (error) {
+    // A concurrent sale opened the same alert first, which is the outcome we wanted.
+    if (error.code !== MONGO_DUPLICATE_KEY) throw error;
+  }
 }
 
 // The deck's aggregation pipeline. Safe to re-run: $merge replaces each product/day row.

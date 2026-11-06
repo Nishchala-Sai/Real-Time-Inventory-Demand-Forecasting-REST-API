@@ -1,9 +1,10 @@
+import { publish } from '../lib/events.js';
 import { Alert } from '../models/Alert.js';
 
 const LOW_STOCK = 'low_stock';
 
 // Opens or resolves at most one alert. Returns which change happened so the caller can
-// emit an event after commit, or null when nothing changed.
+// publish it after commit, or null when nothing changed.
 export async function syncAlert(product, session = null) {
   const open = await Alert.findOne({ productId: product._id, type: LOW_STOCK, status: 'open' }).session(session);
   const low = product.currentStock <= product.reorderPoint;
@@ -29,4 +30,14 @@ export async function syncAlert(product, session = null) {
     return { change: 'resolved', alert: open };
   }
   return null;
+}
+
+export function publishAlertChange(result, product) {
+  if (!result) return;
+  publish(`alert.${result.change}`, product, {
+    id: String(result.alert._id),
+    name: product.name,
+    currentStock: product.currentStock,
+    reorderPoint: product.reorderPoint,
+  });
 }

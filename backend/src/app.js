@@ -9,8 +9,11 @@ import { logger } from './lib/logger.js';
 import { errorHandler, notFound } from './middleware/error.js';
 import { originCheck } from './middleware/origin.js';
 import { globalLimit } from './middleware/rateLimits.js';
+import { alertRoutes } from './routes/alerts.js';
 import { authRoutes } from './routes/auth.js';
+import { forecastRoutes } from './routes/forecast.js';
 import { healthRoutes } from './routes/health.js';
+import { productRoutes } from './routes/products.js';
 import { supplierRoutes } from './routes/suppliers.js';
 import { userRoutes } from './routes/users.js';
 
@@ -54,7 +57,16 @@ export function createApp() {
   app.use(cookieParser());
   app.use(originCheck({ appOrigin: config.APP_ORIGIN, corsOrigins: config.CORS_ORIGINS }));
 
-  app.use('/api/v1', healthRoutes, authRoutes, userRoutes, supplierRoutes);
+  app.use(
+    '/api/v1',
+    healthRoutes,
+    authRoutes,
+    userRoutes,
+    supplierRoutes,
+    productRoutes,
+    forecastRoutes,
+    alertRoutes,
+  );
 
   if (config.NODE_ENV === 'production') {
     app.use(express.static(FRONTEND_DIST));
