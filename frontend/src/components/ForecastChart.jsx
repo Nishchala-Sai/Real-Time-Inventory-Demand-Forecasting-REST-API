@@ -12,27 +12,27 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-export default function ForecastChart({ salesHistory, smaForecast, expForecast, alpha, smaWindow }) {
+export default function ForecastChart({ labels, actual, smaSeries, sesSeries, alpha, smaWindow }) {
   const chartData = {
-    labels: salesHistory.map(d => d.date),
+    labels,
     datasets: [
       {
         label: 'Actual Sales',
-        data: salesHistory.map(d => d.sales),
+        data: actual,
         borderColor: '#3b82f6',
         backgroundColor: '#3b82f6',
         tension: 0.2
       },
       {
         label: `SMA Forecast (k=${smaWindow})`,
-        data: smaForecast,
+        data: smaSeries,
         borderColor: '#f59e0b',
         borderDash: [5, 5],
         tension: 0.2
       },
       {
         label: `Exp Smoothing (α=${alpha})`,
-        data: expForecast,
+        data: sesSeries,
         borderColor: '#10b981',
         tension: 0.2
       }

@@ -1,17 +1,23 @@
 import { useState } from 'react';
+import { addDays, ses, sma } from '@inventory/forecast';
 import InventoryTable from './components/InventoryTable';
 import ForecastChart from './components/ForecastChart';
 import { mockProducts, mockSalesHistory } from './data/mockData';
-import { calculateSMA, calculateExponentialSmoothing } from './utils/themath';
 
 const SMA_WINDOW = 3;
+const HORIZON = 7;
 
 export default function App() {
   const [alpha, setAlpha] = useState(0.3);
 
   const rawSales = mockSalesHistory.map(item => item.sales);
-  const smaForecast = calculateSMA(rawSales, SMA_WINDOW);
-  const expForecast = calculateExponentialSmoothing(rawSales, alpha);
+  const lastDay = mockSalesHistory.at(-1).date;
+  const labels = [
+    ...mockSalesHistory.map(item => item.date),
+    ...Array.from({ length: HORIZON }, (_, i) => addDays(lastDay, i + 1)),
+  ];
+  const smaModel = sma(rawSales, { window: SMA_WINDOW, horizon: HORIZON });
+  const sesModel = ses(rawSales, { alpha, horizon: HORIZON });
 
   return (
     <div className="dashboard-container">
@@ -29,22 +35,23 @@ export default function App() {
       <div className="card">
         <label className="slider-label">
           Adjust Smoothing Factor (α = {alpha})
+          <input
+            type="range"
+            min="0.1"
+            max="0.9"
+            step="0.1"
+            value={alpha}
+            onChange={(e) => setAlpha(parseFloat(e.target.value))}
+            className="slider-input"
+          />
         </label>
-        <input
-          type="range"
-          min="0.1"
-          max="0.9"
-          step="0.1"
-          value={alpha}
-          onChange={(e) => setAlpha(parseFloat(e.target.value))}
-          className="slider-input"
-        />
       </div>
 
       <ForecastChart
-        salesHistory={mockSalesHistory}
-        smaForecast={smaForecast}
-        expForecast={expForecast}
+        labels={labels}
+        actual={rawSales}
+        smaSeries={[...smaModel.fitted, ...smaModel.forecast]}
+        sesSeries={[...sesModel.fitted, ...sesModel.forecast]}
         alpha={alpha}
         smaWindow={SMA_WINDOW}
       />
